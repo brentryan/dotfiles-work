@@ -1,0 +1,81 @@
+require 'rspec/core/rake_task'
+
+  # Berks Install
+  namespace :berks do
+    desc 'Install cookbook dependencies with Berkshelf'
+    task :install do
+      sh 'chef exec berks install'
+    end
+
+    desc 'Remove the berkfile lock file'
+    task :cleanup do
+      files = FileList["Berksfile.lock"]
+      files.each do |file|
+        File.delete(file) if File.exist?(file)
+      end
+    end
+
+    desc 'Publish cookbooks except testing cookbooks or local cookbooks'
+    task publish: ['install'] do
+      sh 'chef exec berks upload --except=test local'
+    end
+  end
+
+  desc 'Install dependencies with berks'
+  task berks: ['berks:install']
+
+  desc 'Publish cookbook with berks'
+  task publish: ['berks:publish']
+
+  # Style tests. cookstyle and Foodcritic
+  namespace :style do
+    desc 'Run Ruby style checks'
+    task :ruby do
+      sh 'chef exec cookstyle .'
+    end
+
+    desc 'Run Chef style checks'
+    task :chef do
+      sh 'chef exec foodcritic . --epic-fail any'
+    end
+  end
+
+  desc 'Run all style checks'
+  task style: ['style:chef', 'style:ruby']
+
+  namespace :test do
+    desc 'Run ChefSpec examples'
+    RSpec::Core::RakeTask.new(:spec)
+
+    namespace :integration do
+      desc 'Run Test Kitchen Converge'
+      task :converge do
+        sh 'chef exec kitchen converge -c'
+      end
+
+      desc 'Run Test Kitchen verify'
+      task :verify do
+        sh 'chef exec kitchen verify'
+      end
+
+      desc 'Cleanup tests in test Kitchen'
+      task :cleanup do
+        sh 'chef exec kitchen destroy -c'
+      end
+    end
+
+    desc 'Run Test Kitchen'
+    task integration: ['integration:converge', 'integration:verify']
+
+    desc 'Cleanup tests'
+    task cleanup: ['integration:cleanup']
+  end
+
+  desc 'Run all tests'
+  task test: ['test:spec', 'test:integration']
+
+  desc 'Cleanup everything'
+  task cleanup: ['test:integration:cleanup', 'berks:cleanup']
+
+desc 'Run all checks for default'
+task default: ['berks', 'style', 'test']
